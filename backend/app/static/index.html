@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Precision 3D Rubik's Cube Solver & Tutor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      overflow: hidden;
+      user-select: none;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+    .glass-modal {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .glass-banner {
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 4px; }
+    .btn-tactile {
+      transition: all 0.12s ease-in-out;
+    }
+    .btn-tactile:active {
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+<body class="w-screen h-screen flex flex-col bg-slate-950">
+  <header class="h-16 px-6 glass-card border-b border-slate-800/80 flex items-center justify-between z-20">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600/50 flex items-center justify-center shadow-lg shadow-black/40">
+        <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+          Rubik's Studio 3D
+          <span class="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold tracking-wider uppercase">
+            Step-by-Step Solver
+          </span>
+        </h1>
+        <p class="text-xs text-slate-400">Physical Simulation & Interactive Solution Player</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+        <span id="conn-dot" class="w-2 h-2 rounded-full bg-rose-500"></span>
+        <span id="conn-text" class="font-mono text-slate-400">Offline</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 relative overflow-hidden">
+    <div id="live-solve-banner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 glass-banner rounded-full px-5 py-2 z-20 flex items-center space-x-4">
+      <div class="flex items-center space-x-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-300 font-mono" id="banner-status-text">SOLVING ACTIVE</span>
+      </div>
+      <div class="h-4 w-px bg-slate-700"></div>
+      <div class="flex items-center space-x-3 text-xs font-mono">
+        <span class="text-slate-300">Move: <strong class="text-white" id="banner-move-counter">0 / 0</strong></span>
+        <span class="text-slate-400">Remaining: <strong class="text-cyan-400" id="banner-remaining-moves">0</strong></span>
+        <span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold" id="banner-next-chip">Next: --</span>
+      </div>
+    </div>
+
+    <div id="canvas-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+    <div class="absolute top-4 left-4 w-80 flex flex-col space-y-4 pointer-events-auto z-10">
+      <div class="glass-card rounded-2xl p-4 border border-slate-800 flex flex-col space-y-3.5">
+        <div class="flex items-center justify-between pb-2.5 border-b border-slate-800/80">
+          <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Cube Controls</h2>
+          <span id="cube-status-badge" class="text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            SOLVED
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-scramble" class="btn-tactile flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-bold">
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Scramble</span>
+          </button>
+          <button id="btn-reset" class="btn-tactile flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-bold">
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Reset</span>
+          </button>
+        </div>
+
+        <button id="btn-open-color-picker" class="btn-tactile w-full flex items-center justify-center space-x-2 px-3.5 py-2.5 rounded-xl bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-700/40 text-indigo-200 text-xs font-bold">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 5 5 0 015-5 4 4 0 014 4 5 5 0 01-5 5zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          </svg>
+          <span>Enter Physical Colors</span>
+        </button>
+
+        <button id="btn-calculate-solve" class="btn-tactile w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/25">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          <span>Compute Solution</span>
+        </button>
+
+        <div class="pt-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Direct Face Rotations</label>
+          <div class="grid grid-cols-6 gap-1 font-mono text-xs" id="manual-moves-grid"></div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-3.5 border border-slate-800 flex flex-col space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Move Sequence</h3>
+          <span id="history-count" class="text-[10px] font-mono text-slate-500">0 moves</span>
+        </div>
+        <div id="history-ribbon" class="flex items-center space-x-1.5 overflow-x-auto custom-scrollbar py-1">
+          <span class="text-xs text-slate-600 font-mono">Clean state.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="absolute top-4 right-4 w-80 flex flex-col space-y-4 pointer-events-auto z-10">
+      <div class="glass-card rounded-2xl p-4 border border-slate-800 flex flex-col space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Solution Metrics</span>
+          <span id="metrics-status-badge" class="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-slate-800 text-slate-400">READY</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span class="text-[10px] text-slate-500 block uppercase">Total Moves</span>
+            <span class="text-lg font-bold text-cyan-400" id="metric-total-moves">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span class="text-[10px] text-slate-500 block uppercase">Remaining</span>
+            <span class="text-lg font-bold text-amber-400" id="metric-remaining-moves">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span class="text-[10px] text-slate-500 block uppercase">Completed</span>
+            <span class="text-lg font-bold text-emerald-400" id="metric-completed-moves">0</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+            <span class="text-[10px] text-slate-500 block uppercase">Progress</span>
+            <span class="text-lg font-bold text-blue-400" id="metric-progress-pct">0%</span>
+          </div>
+        </div>
+
+        <div id="solution-summary-card" class="hidden p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 font-mono leading-relaxed">
+          <span class="text-slate-300 font-bold block mb-0.5">Algorithm:</span>
+          Two-Phase Optimal Coset Solver (God's Number ≤ 20 HTM).
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-4 border border-slate-800 flex flex-col space-y-2.5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Cube Orientation Reference</h3>
+        <p class="text-[11px] text-slate-400">Hold your real cube matching this orientation:</p>
+        <div class="grid grid-cols-3 gap-2 text-xs font-mono">
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Top (U)</span>
+            <span class="w-3 h-3 rounded-full bg-white border border-slate-600 my-1"></span>
+            <span class="text-white text-[11px] font-bold">White</span>
+          </div>
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Front (F)</span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500 my-1"></span>
+            <span class="text-emerald-400 text-[11px] font-bold">Green</span>
+          </div>
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Right (R)</span>
+            <span class="w-3 h-3 rounded-full bg-rose-500 my-1"></span>
+            <span class="text-rose-400 text-[11px] font-bold">Red</span>
+          </div>
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Left (L)</span>
+            <span class="w-3 h-3 rounded-full bg-orange-500 my-1"></span>
+            <span class="text-orange-400 text-[11px] font-bold">Orange</span>
+          </div>
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Base (D)</span>
+            <span class="w-3 h-3 rounded-full bg-amber-400 my-1"></span>
+            <span class="text-amber-300 text-[11px] font-bold">Yellow</span>
+          </div>
+          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col items-center">
+            <span class="text-[9px] text-slate-500 uppercase">Back (B)</span>
+            <span class="w-3 h-3 rounded-full bg-blue-500 my-1"></span>
+            <span class="text-blue-400 text-[11px] font-bold">Blue</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="step-navigator" class="hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 pointer-events-auto z-30">
+      <div class="glass-modal rounded-3xl p-5 border border-slate-700/60 flex flex-col space-y-3.5 shadow-2xl">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800/60">
+          <div class="flex items-center space-x-2 text-xs font-mono">
+            <span class="text-slate-400">Solution Track:</span>
+            <span class="text-cyan-400 font-bold" id="timeline-count-badge">0 Moves</span>
+          </div>
+          <div id="moves-timeline-ribbon" class="flex items-center space-x-1 overflow-x-auto custom-scrollbar max-w-sm py-0.5"></div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3.5">
+            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center font-mono font-black text-2xl text-cyan-300 shadow-inner" id="step-move-badge">
+              --
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider" id="step-counter-text">Step 0 of 0</span>
+              </div>
+              <p class="text-sm font-semibold text-slate-100" id="step-instruction-text">
+                Press "Next Move" to begin physical solving.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <button id="btn-step-prev" class="btn-tactile flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Previous Move</span>
+            </button>
+
+            <button id="btn-step-autoplay" class="btn-tactile p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200" title="Auto Play">
+              <svg id="play-icon" class="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+              <svg id="pause-icon" class="hidden w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 9v6m4-6v6" />
+              </svg>
+            </button>
+
+            <button id="btn-step-next" class="btn-tactile flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/25 disabled:opacity-30 disabled:cursor-not-allowed">
+              <span>Next Move</span>
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div id="step-progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-200" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="color-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-modal rounded-3xl w-full max-w-xl p-6 border border-slate-700/60 shadow-2xl flex flex-col space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="text-base font-bold text-white">Physical Cube Color Transcription</h3>
+          <p id="modal-face-subtitle" class="text-xs text-slate-400">Step 1 of 6: UP Face (White)</p>
+        </div>
+        <button id="btn-close-modal" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition">✕</button>
+      </div>
+
+      <div class="flex flex-col items-center space-y-4">
+        <div id="modal-grid" class="grid grid-cols-3 gap-2.5 p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800"></div>
+
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs font-semibold text-slate-400">Select Sticker Color:</span>
+          <div id="modal-palette" class="flex items-center gap-2"></div>
+        </div>
+
+        <div id="modal-tallies" class="grid grid-cols-6 gap-2 w-full pt-1 text-[11px] font-mono"></div>
+      </div>
+
+      <div id="modal-error" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium"></div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <button id="btn-modal-prev" class="btn-tactile px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold disabled:opacity-30">Previous Face</button>
+        <button id="btn-modal-next" class="btn-tactile px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold">Next Face</button>
+        <button id="btn-modal-apply" class="btn-tactile hidden px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20">Apply & Solve</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const VALID_MOVES = ["U", "U'", "U2", "D", "D'", "D2", "L", "L'", "L2", "R", "R'", "R2", "F", "F'", "F2", "B", "B'", "B2"];
+    const PALETTE = [
+      { key: "U", name: "White", hex: "#f8fafc" },
+      { key: "R", name: "Red", hex: "#dc2626" },
+      { key: "F", name: "Green", hex: "#16a34a" },
+      { key: "D", name: "Yellow", hex: "#ca8a04" },
+      { key: "L", name: "Orange", hex: "#ea580c" },
+      { key: "B", name: "Blue", hex: "#2563eb" }
+    ];
+    const FACES_ORDER = ["U", "F", "R", "B", "L", "D"];
+    const FACE_LABELS = {
+      U: "UP Face (Top - White Center)",
+      F: "FRONT Face (Facing you - Green Center)",
+      R: "RIGHT Face (Right - Red Center)",
+      B: "BACK Face (Back - Blue Center)",
+      L: "LEFT Face (Left - Orange Center)",
+      D: "DOWN Face (Bottom - Yellow Center)"
+    };
+
+    const MOVE_DESCRIPTIONS = {
+      "U": "Rotate the TOP (White) face 90° Clockwise.",
+      "U'": "Rotate the TOP (White) face 90° Counter-Clockwise.",
+      "U2": "Rotate the TOP (White) face 180°.",
+      "D": "Rotate the BOTTOM (Yellow) face 90° Clockwise.",
+      "D'": "Rotate the BOTTOM (Yellow) face 90° Counter-Clockwise.",
+      "D2": "Rotate the BOTTOM (Yellow) face 180°.",
+      "R": "Rotate the RIGHT (Red) face 90° Clockwise.",
+      "R'": "Rotate the RIGHT (Red) face 90° Counter-Clockwise.",
+      "R2": "Rotate the RIGHT (Red) face 180°.",
+      "L": "Rotate the LEFT (Orange) face 90° Clockwise.",
+      "L'": "Rotate the LEFT (Orange) face 90° Counter-Clockwise.",
+      "L2": "Rotate the LEFT (Orange) face 180°.",
+      "F": "Rotate the FRONT (Green) face 90° Clockwise.",
+      "F'": "Rotate the FRONT (Green) face 90° Counter-Clockwise.",
+      "F2": "Rotate the FRONT (Green) face 180°.",
+      "B": "Rotate the BACK (Blue) face 90° Clockwise.",
+      "B'": "Rotate the BACK (Blue) face 90° Counter-Clockwise.",
+      "B2": "Rotate the BACK (Blue) face 180°."
+    };
+
+    let scene, camera, renderer, controls, cubeGroup, pivotGroup;
+    let cubies = [];
+    let moveQueue = [];
+    let isAnimating = false;
+    let moveHistory = [];
+    let ws = null;
+
+    let solutionMoves = [];
+    let currentStepIndex = 0;
+    let autoPlayTimer = null;
+
+    function init3D() {
+      const container = document.getElementById("canvas-container");
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+      camera.position.set(5.2, 5.2, 6.2);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 4;
+      controls.maxDistance = 14;
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+      scene.add(ambientLight);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.25);
+      keyLight.position.set(8, 14, 8);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.width = 1024;
+      keyLight.shadow.mapSize.height = 1024;
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.65);
+      fillLight.position.set(-8, 6, -8);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
+      rimLight.position.set(0, -8, 6);
+      scene.add(rimLight);
+
+      addGroundShadow();
+
+      cubeGroup = new THREE.Group();
+      pivotGroup = new THREE.Group();
+      scene.add(cubeGroup);
+      scene.add(pivotGroup);
+
+      buildRealisticCube();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+
+      animate();
+    }
+
+    function addGroundShadow() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0.65)");
+      gradient.addColorStop(0.5, "rgba(0, 0, 0, 0.25)");
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 128, 128);
+
+      const shadowTex = new THREE.CanvasTexture(canvas);
+      const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true });
+      const shadowGeo = new THREE.PlaneGeometry(6, 6);
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = -2.25;
+      scene.add(shadowMesh);
+    }
+
+    function createRealisticCubie(x, y, z) {
+      const cubieRoot = new THREE.Group();
+      cubieRoot.position.set(x, y, z);
+
+      const coreGeo = new THREE.BoxGeometry(0.97, 0.97, 0.97);
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x111625,
+        roughness: 0.38,
+        metalness: 0.08
+      });
+      const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+      coreMesh.castShadow = true;
+      coreMesh.receiveShadow = true;
+      cubieRoot.add(coreMesh);
+
+      const stickerGeo = new THREE.PlaneGeometry(0.86, 0.86);
+
+      function createSticker(colorHex, posX, posY, posZ, rotX, rotY, rotZ) {
+        const mat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.15,
+          metalness: 0.02
+        });
+        const mesh = new THREE.Mesh(stickerGeo, mat);
+        mesh.position.set(posX, posY, posZ);
+        mesh.rotation.set(rotX, rotY, rotZ);
+        cubieRoot.add(mesh);
+      }
+
+      const offset = 0.488;
+      if (x === 1) createSticker(0xdc2626, offset, 0, 0, 0, Math.PI / 2, 0);
+      if (x === -1) createSticker(0xea580c, -offset, 0, 0, 0, -Math.PI / 2, 0);
+      if (y === 1) createSticker(0xf8fafc, 0, offset, 0, -Math.PI / 2, 0, 0);
+      if (y === -1) createSticker(0xca8a04, 0, -offset, 0, Math.PI / 2, 0, 0);
+      if (z === 1) createSticker(0x16a34a, 0, 0, offset, 0, 0, 0);
+      if (z === -1) createSticker(0x2563eb, 0, 0, -offset, 0, Math.PI, 0);
+
+      return cubieRoot;
+    }
+
+    function buildRealisticCube() {
+      while (cubeGroup.children.length > 0) {
+        cubeGroup.remove(cubeGroup.children[0]);
+      }
+      cubies = [];
+
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            if (x === 0 && y === 0 && z === 0) continue;
+            const piece = createRealisticCubie(x, y, z);
+            cubeGroup.add(piece);
+            cubies.push(piece);
+          }
+        }
+      }
+    }
+
+    const FACE_AXES = {
+      U: new THREE.Vector3(0, 1, 0),
+      D: new THREE.Vector3(0, 1, 0),
+      R: new THREE.Vector3(1, 0, 0),
+      L: new THREE.Vector3(1, 0, 0),
+      F: new THREE.Vector3(0, 0, 1),
+      B: new THREE.Vector3(0, 0, 1)
+    };
+    const FACE_CONDITIONS = {
+      U: (p) => p.y > 0.5,
+      D: (p) => p.y < -0.5,
+      R: (p) => p.x > 0.5,
+      L: (p) => p.x < -0.5,
+      F: (p) => p.z > 0.5,
+      B: (p) => p.z < -0.5
+    };
+    const FACE_BASE_ANGLES = {
+      U: -Math.PI / 2,
+      D: Math.PI / 2,
+      R: -Math.PI / 2,
+      L: Math.PI / 2,
+      F: -Math.PI / 2,
+      B: Math.PI / 2
+    };
+
+    function animateFaceTurn(move, onComplete) {
+      const face = move[0];
+      let angle = FACE_BASE_ANGLES[face];
+      if (move.endsWith("'")) angle = -angle;
+      else if (move.endsWith("2")) angle = angle * 2;
+
+      const axis = FACE_AXES[face];
+      const condition = FACE_CONDITIONS[face];
+
+      pivotGroup.rotation.set(0, 0, 0);
+      pivotGroup.position.set(0, 0, 0);
+
+      const targetCubies = [];
+      const worldPos = new THREE.Vector3();
+
+      cubeGroup.children.slice().forEach((child) => {
+        child.getWorldPosition(worldPos);
+        if (condition(worldPos)) {
+          targetCubies.push(child);
+        }
+      });
+
+      targetCubies.forEach((c) => pivotGroup.attach(c));
+
+      let currentAngle = 0;
+      const duration = 200;
+      const startTime = performance.now();
+
+      function stepAnimation(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+        const targetRot = angle * ease;
+        const deltaRot = targetRot - currentAngle;
+        currentAngle = targetRot;
+
+        pivotGroup.rotateOnAxis(axis, deltaRot);
+
+        if (progress < 1) {
+          requestAnimationFrame(stepAnimation);
+        } else {
+          const finalDiff = angle - currentAngle;
+          pivotGroup.rotateOnAxis(axis, finalDiff);
+
+          targetCubies.forEach((c) => {
+            cubeGroup.attach(c);
+            c.position.set(
+              Math.round(c.position.x),
+              Math.round(c.position.y),
+              Math.round(c.position.z)
+            );
+          });
+          pivotGroup.rotation.set(0, 0, 0);
+          onComplete();
+        }
+      }
+
+      requestAnimationFrame(stepAnimation);
+    }
+
+    function processQueue() {
+      if (isAnimating || moveQueue.length === 0) return;
+      isAnimating = true;
+      const nextMove = moveQueue.shift();
+
+      animateFaceTurn(nextMove, () => {
+        isAnimating = false;
+        recordMove(nextMove);
+        processQueue();
+      });
+    }
+
+    function enqueueMoves(moves) {
+      moveQueue.push(...moves);
+      processQueue();
+    }
+
+    function recordMove(m) {
+      moveHistory.push(m);
+      document.getElementById("history-count").innerText = `${moveHistory.length} moves`;
+      const ribbon = document.getElementById("history-ribbon");
+      if (moveHistory.length === 1) ribbon.innerHTML = "";
+      const chip = document.createElement("span");
+      chip.className = "px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-cyan-300 flex-shrink-0";
+      chip.innerText = m;
+      ribbon.appendChild(chip);
+      ribbon.scrollLeft = ribbon.scrollWidth;
+      document.getElementById("cube-status-badge").className = "text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20";
+      document.getElementById("cube-status-badge").innerText = "SCRAMBLED";
+    }
+
+    function invertMove(m) {
+      if (m.endsWith("'")) return m[0];
+      if (m.endsWith("2")) return m;
+      return `${m}'`;
+    }
+
+    function showStepNavigator(moves) {
+      solutionMoves = moves;
+      currentStepIndex = 0;
+      if (autoPlayTimer) clearInterval(autoPlayTimer);
+
+      document.getElementById("step-navigator").classList.remove("hidden");
+      document.getElementById("live-solve-banner").classList.remove("hidden");
+      document.getElementById("solution-summary-card").classList.remove("hidden");
+
+      document.getElementById("metric-total-moves").innerText = moves.length;
+      document.getElementById("timeline-count-badge").innerText = `${moves.length} Moves`;
+
+      renderMovesTimeline();
+      updateNavigatorUI();
+    }
+
+    function renderMovesTimeline() {
+      const ribbon = document.getElementById("moves-timeline-ribbon");
+      ribbon.innerHTML = "";
+
+      solutionMoves.forEach((m, idx) => {
+        const btn = document.createElement("button");
+        btn.id = `timeline-chip-${idx}`;
+        btn.className = "px-2 py-0.5 rounded text-[11px] font-mono font-bold transition btn-tactile " +
+          (idx < currentStepIndex
+            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+            : idx === currentStepIndex
+            ? "bg-cyan-500 text-slate-950 font-black shadow-md scale-105"
+            : "bg-slate-900 border border-slate-800 text-slate-400");
+        btn.innerText = m;
+        ribbon.appendChild(btn);
+      });
+    }
+
+    function updateNavigatorUI() {
+      const total = solutionMoves.length;
+      const prevBtn = document.getElementById("btn-step-prev");
+      const nextBtn = document.getElementById("btn-step-next");
+      const badge = document.getElementById("step-move-badge");
+      const counterText = document.getElementById("step-counter-text");
+      const instructionText = document.getElementById("step-instruction-text");
+      const progressBar = document.getElementById("step-progress-bar");
+
+      prevBtn.disabled = (currentStepIndex === 0) || isAnimating;
+      nextBtn.disabled = (currentStepIndex >= total) || isAnimating;
+
+      counterText.innerText = `Step ${currentStepIndex} of ${total}`;
+      const pct = total > 0 ? Math.round((currentStepIndex / total) * 100) : 0;
+      progressBar.style.width = `${pct}%`;
+
+      document.getElementById("metric-completed-moves").innerText = currentStepIndex;
+      document.getElementById("metric-remaining-moves").innerText = Math.max(0, total - currentStepIndex);
+      document.getElementById("metric-progress-pct").innerText = `${pct}%`;
+
+      document.getElementById("banner-move-counter").innerText = `${currentStepIndex} / ${total}`;
+      document.getElementById("banner-remaining-moves").innerText = Math.max(0, total - currentStepIndex);
+
+      solutionMoves.forEach((_, idx) => {
+        const chip = document.getElementById(`timeline-chip-${idx}`);
+        if (!chip) return;
+        if (idx < currentStepIndex) {
+          chip.className = "px-2 py-0.5 rounded text-[11px] font-mono font-bold transition btn-tactile bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        } else if (idx === currentStepIndex) {
+          chip.className = "px-2 py-0.5 rounded text-[11px] font-mono font-bold transition btn-tactile bg-cyan-400 text-slate-950 font-black shadow-md scale-110";
+          chip.scrollIntoView({ behavior: "smooth", inline: "center" });
+        } else {
+          chip.className = "px-2 py-0.5 rounded text-[11px] font-mono font-bold transition btn-tactile bg-slate-900 border border-slate-800 text-slate-400";
+        }
+      });
+
+      if (currentStepIndex < total) {
+        const nextMove = solutionMoves[currentStepIndex];
+        badge.innerText = nextMove;
+        instructionText.innerText = MOVE_DESCRIPTIONS[nextMove] || `Apply move ${nextMove}`;
+        document.getElementById("banner-status-text").innerText = "SOLVING IN PROGRESS";
+        document.getElementById("banner-status-text").className = "text-xs font-bold uppercase tracking-wider text-cyan-300 font-mono";
+        document.getElementById("banner-next-chip").innerText = `Next: ${nextMove}`;
+        document.getElementById("metrics-status-badge").innerText = "IN PROGRESS";
+        document.getElementById("metrics-status-badge").className = "text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30";
+      } else {
+        badge.innerText = "✓";
+        instructionText.innerText = "All moves executed! The Rubik's Cube is fully solved.";
+        document.getElementById("banner-status-text").innerText = "SOLVED";
+        document.getElementById("banner-status-text").className = "text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono";
+        document.getElementById("banner-next-chip").innerText = "Done";
+        document.getElementById("metrics-status-badge").innerText = "SOLVED";
+        document.getElementById("metrics-status-badge").className = "text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+        document.getElementById("cube-status-badge").className = "text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        document.getElementById("cube-status-badge").innerText = "SOLVED";
+        if (autoPlayTimer) toggleAutoPlay();
+      }
+    }
+
+    function stepNext() {
+      if (currentStepIndex >= solutionMoves.length || isAnimating) return;
+      const move = solutionMoves[currentStepIndex];
+      isAnimating = true;
+      animateFaceTurn(move, () => {
+        isAnimating = false;
+        currentStepIndex++;
+        updateNavigatorUI();
+      });
+    }
+
+    function stepPrev() {
+      if (currentStepIndex <= 0 || isAnimating) return;
+      const move = solutionMoves[currentStepIndex - 1];
+      const invMove = invertMove(move);
+      isAnimating = true;
+      animateFaceTurn(invMove, () => {
+        isAnimating = false;
+        currentStepIndex--;
+        updateNavigatorUI();
+      });
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayTimer) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+        document.getElementById("play-icon").classList.remove("hidden");
+        document.getElementById("pause-icon").classList.add("hidden");
+      } else {
+        document.getElementById("play-icon").classList.add("hidden");
+        document.getElementById("pause-icon").classList.remove("hidden");
+        autoPlayTimer = setInterval(() => {
+          if (currentStepIndex < solutionMoves.length && !isAnimating) {
+            stepNext();
+          } else if (currentStepIndex >= solutionMoves.length) {
+            toggleAutoPlay();
+          }
+        }, 550);
+      }
+    }
+
+    document.getElementById("btn-step-next").onclick = stepNext;
+    document.getElementById("btn-step-prev").onclick = stepPrev;
+    document.getElementById("btn-step-autoplay").onclick = toggleAutoPlay;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function initWebSocket() {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host;
+      const wsUrl = `${proto}//${host}/api/v1/ws/default`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById("conn-dot").className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+        document.getElementById("conn-text").innerText = "Connected";
+      };
+
+      ws.onclose = () => {
+        document.getElementById("conn-dot").className = "w-2 h-2 rounded-full bg-rose-500";
+        document.getElementById("conn-text").innerText = "Offline";
+        setTimeout(initWebSocket, 2000);
+      };
+    }
+
+    document.getElementById("btn-scramble").onclick = async () => {
+      try {
+        const res = await fetch("/api/v1/cube/scramble", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ length: 15 })
+        });
+        const data = await res.json();
+        document.getElementById("step-navigator").classList.add("hidden");
+        document.getElementById("live-solve-banner").classList.add("hidden");
+        document.getElementById("solution-summary-card").classList.add("hidden");
+        document.getElementById("metric-total-moves").innerText = "0";
+        document.getElementById("metric-remaining-moves").innerText = "0";
+        document.getElementById("metric-completed-moves").innerText = "0";
+        document.getElementById("metric-progress-pct").innerText = "0%";
+        document.getElementById("metrics-status-badge").innerText = "SCRAMBLED";
+        document.getElementById("metrics-status-badge").className = "text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30";
+        enqueueMoves(data.scramble);
+      } catch (e) {}
+    };
+
+    document.getElementById("btn-reset").onclick = async () => {
+      try {
+        await fetch("/api/v1/cube/reset", { method: "POST" });
+        buildRealisticCube();
+        moveQueue = [];
+        moveHistory = [];
+        solutionMoves = [];
+        currentStepIndex = 0;
+        if (autoPlayTimer) toggleAutoPlay();
+        document.getElementById("history-ribbon").innerHTML = '<span class="text-xs text-slate-600 font-mono">Clean state.</span>';
+        document.getElementById("history-count").innerText = "0 moves";
+        document.getElementById("cube-status-badge").className = "text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        document.getElementById("cube-status-badge").innerText = "SOLVED";
+        document.getElementById("step-navigator").classList.add("hidden");
+        document.getElementById("live-solve-banner").classList.add("hidden");
+        document.getElementById("solution-summary-card").classList.add("hidden");
+        document.getElementById("metric-total-moves").innerText = "0";
+        document.getElementById("metric-remaining-moves").innerText = "0";
+        document.getElementById("metric-completed-moves").innerText = "0";
+        document.getElementById("metric-progress-pct").innerText = "0%";
+        document.getElementById("metrics-status-badge").innerText = "READY";
+        document.getElementById("metrics-status-badge").className = "text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-slate-800 text-slate-400";
+      } catch (e) {}
+    };
+
+    document.getElementById("btn-calculate-solve").onclick = async () => {
+      try {
+        const stateRes = await fetch("/api/v1/cube/state");
+        const stateData = await stateRes.json();
+        if (stateData.is_solved && moveQueue.length === 0) {
+          alert("Cube is already solved! Click Scramble first, or rotate some faces manually.");
+          return;
+        }
+
+        const solveRes = await fetch("/api/v1/agent/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const solveData = await solveRes.json();
+        if (solveData.moves && solveData.moves.length > 0) {
+          showStepNavigator(solveData.moves);
+        } else {
+          alert("Cube is already in a solved configuration.");
+        }
+      } catch (e) {
+        alert("Unable to compute solution. Please check connection.");
+      }
+    };
+
+    const movesGrid = document.getElementById("manual-moves-grid");
+    VALID_MOVES.forEach((m) => {
+      const btn = document.createElement("button");
+      btn.className = "btn-tactile py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 font-semibold text-xs";
+      btn.innerText = m;
+      btn.onclick = async () => {
+        enqueueMoves([m]);
+        try {
+          await fetch("/api/v1/cube/move", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ move: m })
+          });
+        } catch (e) {}
+      };
+      movesGrid.appendChild(btn);
+    });
+
+    let currentModalFace = 0;
+    let selectedPaint = "U";
+    let modalStickers = {
+      U: Array(9).fill("U"),
+      R: Array(9).fill("R"),
+      F: Array(9).fill("F"),
+      D: Array(9).fill("D"),
+      L: Array(9).fill("L"),
+      B: Array(9).fill("B")
+    };
+
+    const modal = document.getElementById("color-modal");
+    document.getElementById("btn-open-color-picker").onclick = () => {
+      currentModalFace = 0;
+      modal.classList.remove("hidden");
+      renderModal();
+    };
+    document.getElementById("btn-close-modal").onclick = () => {
+      modal.classList.add("hidden");
+    };
+
+    function renderModal() {
+      const face = FACES_ORDER[currentModalFace];
+      document.getElementById("modal-face-subtitle").innerText = `Step ${currentModalFace + 1} of 6: ${FACE_LABELS[face]}`;
+
+      const grid = document.getElementById("modal-grid");
+      grid.innerHTML = "";
+      modalStickers[face].forEach((colKey, idx) => {
+        const hex = PALETTE.find((p) => p.key === colKey)?.hex || "#fff";
+        const isCenter = idx === 4;
+        const btn = document.createElement("button");
+        btn.style.backgroundColor = hex;
+        btn.className = `w-14 h-14 rounded-xl border border-slate-900/60 shadow-md font-bold text-xs flex items-center justify-center btn-tactile ${
+          colKey === "U" || colKey === "D" ? "text-slate-900" : "text-white"
+        } ${isCenter ? "cursor-not-allowed opacity-90 ring-2 ring-blue-500/50" : "hover:ring-2 hover:ring-white/80"}`;
+        btn.innerText = isCenter ? "CENTER" : "";
+        if (!isCenter) {
+          btn.onclick = () => {
+            modalStickers[face][idx] = selectedPaint;
+            renderModal();
+          };
+        }
+        grid.appendChild(btn);
+      });
+
+      const palContainer = document.getElementById("modal-palette");
+      palContainer.innerHTML = "";
+      PALETTE.forEach((p) => {
+        const pBtn = document.createElement("button");
+        pBtn.style.backgroundColor = p.hex;
+        pBtn.className = `w-7 h-7 rounded-lg border border-slate-700 btn-tactile ${
+          selectedPaint === p.key ? "ring-2 ring-cyan-400 scale-110 shadow-lg" : "opacity-80"
+        }`;
+        pBtn.onclick = () => {
+          selectedPaint = p.key;
+          renderModal();
+        };
+        palContainer.appendChild(pBtn);
+      });
+
+      const tallies = document.getElementById("modal-tallies");
+      tallies.innerHTML = "";
+      const counts = { U: 0, R: 0, F: 0, D: 0, L: 0, B: 0 };
+      Object.values(modalStickers).forEach((arr) => arr.forEach((k) => counts[k]++));
+
+      PALETTE.forEach((p) => {
+        const cnt = counts[p.key] || 0;
+        const isOk = cnt === 9;
+        const div = document.createElement("div");
+        div.className = `p-1.5 rounded-lg border text-center ${
+          isOk ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-slate-900 border-slate-800 text-slate-400"
+        }`;
+        div.innerHTML = `<span class="block font-semibold">${p.name}</span><span>${cnt}/9</span>`;
+        tallies.appendChild(div);
+      });
+
+      document.getElementById("btn-modal-prev").disabled = currentModalFace === 0;
+      if (currentModalFace < 5) {
+        document.getElementById("btn-modal-next").classList.remove("hidden");
+        document.getElementById("btn-modal-apply").classList.add("hidden");
+      } else {
+        document.getElementById("btn-modal-next").classList.add("hidden");
+        document.getElementById("btn-modal-apply").classList.remove("hidden");
+      }
+    }
+
+    document.getElementById("btn-modal-prev").onclick = () => {
+      if (currentModalFace > 0) {
+        currentModalFace--;
+        renderModal();
+      }
+    };
+    document.getElementById("btn-modal-next").onclick = () => {
+      if (currentModalFace < 5) {
+        currentModalFace++;
+        renderModal();
+      }
+    };
+
+    document.getElementById("btn-modal-apply").onclick = async () => {
+      const full54 = [
+        modalStickers.U.join(""),
+        modalStickers.R.join(""),
+        modalStickers.F.join(""),
+        modalStickers.D.join(""),
+        modalStickers.L.join(""),
+        modalStickers.B.join("")
+      ].join("");
+
+      const errBox = document.getElementById("modal-error");
+      errBox.classList.add("hidden");
+
+      try {
+        const res = await fetch("/api/v1/cube/set-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ facelets: full54 })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Validation failed");
+        }
+        modal.classList.add("hidden");
+        document.getElementById("cube-status-badge").className = "text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20";
+        document.getElementById("cube-status-badge").innerText = "CUSTOM CUBE";
+
+        const solveRes = await fetch("/api/v1/agent/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const solveData = await solveRes.json();
+        if (solveData.moves && solveData.moves.length > 0) {
+          showStepNavigator(solveData.moves);
+        }
+      } catch (e) {
+        errBox.innerText = e.message;
+        errBox.classList.remove("hidden");
+      }
+    };
+
+    window.onload = () => {
+      init3D();
+      initWebSocket();
+    };
+  </script>
+</body>
+</html>
