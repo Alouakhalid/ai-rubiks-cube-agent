@@ -15,9 +15,14 @@
 
 ## 🎬 Live Demonstration
 
-https://github.com/user-attachments/assets/demo.mp4
+<p align="center">
+  <img src="assets/demo.gif" alt="AI Rubik's Cube Agent Live Demonstration" width="100%" />
+</p>
 
-> **Watch the full high-resolution demo video directly in the repository:** [`assets/demo.mp4`](assets/demo.mp4) or [`assets/demo.mov`](assets/demo.mov).
+<p align="center">
+  ▶️ <strong><a href="assets/demo.mp4">Download / Watch Full 60 FPS Video (MP4)</a></strong> &bull; 
+  🎥 <strong><a href="assets/demo.mov">High-Bitrate Original Recording (MOV)</a></strong>
+</p>
 
 ---
 

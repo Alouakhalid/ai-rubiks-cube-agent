@@ -441,7 +441,51 @@
       scene.add(shadowMesh);
     }
 
-    function createRealisticCubie(x, y, z) {
+    const DEFAULT_SOLVED_54 = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+    const COLOR_HEX_MAP = {
+      U: 0xf8fafc,
+      R: 0xdc2626,
+      F: 0x16a34a,
+      D: 0xca8a04,
+      L: 0xea580c,
+      B: 0x2563eb
+    };
+
+    function getFaceletIndex(face, x, y, z) {
+      if (face === "U") {
+        const row = z === -1 ? 0 : (z === 0 ? 1 : 2);
+        const col = x === -1 ? 0 : (x === 0 ? 1 : 2);
+        return row * 3 + col;
+      }
+      if (face === "D") {
+        const row = z === 1 ? 0 : (z === 0 ? 1 : 2);
+        const col = x === -1 ? 0 : (x === 0 ? 1 : 2);
+        return 27 + row * 3 + col;
+      }
+      if (face === "F") {
+        const row = y === 1 ? 0 : (y === 0 ? 1 : 2);
+        const col = x === -1 ? 0 : (x === 0 ? 1 : 2);
+        return 18 + row * 3 + col;
+      }
+      if (face === "B") {
+        const row = y === 1 ? 0 : (y === 0 ? 1 : 2);
+        const col = x === 1 ? 0 : (x === 0 ? 1 : 2);
+        return 45 + row * 3 + col;
+      }
+      if (face === "L") {
+        const row = y === 1 ? 0 : (y === 0 ? 1 : 2);
+        const col = z === -1 ? 0 : (z === 0 ? 1 : 2);
+        return 36 + row * 3 + col;
+      }
+      if (face === "R") {
+        const row = y === 1 ? 0 : (y === 0 ? 1 : 2);
+        const col = z === 1 ? 0 : (z === 0 ? 1 : 2);
+        return 9 + row * 3 + col;
+      }
+      return 0;
+    }
+
+    function createRealisticCubie(x, y, z, facelets = DEFAULT_SOLVED_54) {
       const cubieRoot = new THREE.Group();
       cubieRoot.position.set(x, y, z);
 
@@ -471,17 +515,35 @@
       }
 
       const offset = 0.488;
-      if (x === 1) createSticker(0xdc2626, offset, 0, 0, 0, Math.PI / 2, 0);
-      if (x === -1) createSticker(0xea580c, -offset, 0, 0, 0, -Math.PI / 2, 0);
-      if (y === 1) createSticker(0xf8fafc, 0, offset, 0, -Math.PI / 2, 0, 0);
-      if (y === -1) createSticker(0xca8a04, 0, -offset, 0, Math.PI / 2, 0, 0);
-      if (z === 1) createSticker(0x16a34a, 0, 0, offset, 0, 0, 0);
-      if (z === -1) createSticker(0x2563eb, 0, 0, -offset, 0, Math.PI, 0);
+      if (x === 1) {
+        const char = facelets[getFaceletIndex("R", x, y, z)] || "R";
+        createSticker(COLOR_HEX_MAP[char] || 0xdc2626, offset, 0, 0, 0, Math.PI / 2, 0);
+      }
+      if (x === -1) {
+        const char = facelets[getFaceletIndex("L", x, y, z)] || "L";
+        createSticker(COLOR_HEX_MAP[char] || 0xea580c, -offset, 0, 0, 0, -Math.PI / 2, 0);
+      }
+      if (y === 1) {
+        const char = facelets[getFaceletIndex("U", x, y, z)] || "U";
+        createSticker(COLOR_HEX_MAP[char] || 0xf8fafc, 0, offset, 0, -Math.PI / 2, 0, 0);
+      }
+      if (y === -1) {
+        const char = facelets[getFaceletIndex("D", x, y, z)] || "D";
+        createSticker(COLOR_HEX_MAP[char] || 0xca8a04, 0, -offset, 0, Math.PI / 2, 0, 0);
+      }
+      if (z === 1) {
+        const char = facelets[getFaceletIndex("F", x, y, z)] || "F";
+        createSticker(COLOR_HEX_MAP[char] || 0x16a34a, 0, 0, offset, 0, 0, 0);
+      }
+      if (z === -1) {
+        const char = facelets[getFaceletIndex("B", x, y, z)] || "B";
+        createSticker(COLOR_HEX_MAP[char] || 0x2563eb, 0, 0, -offset, 0, Math.PI, 0);
+      }
 
       return cubieRoot;
     }
 
-    function buildRealisticCube() {
+    function buildRealisticCube(facelets = DEFAULT_SOLVED_54) {
       while (cubeGroup.children.length > 0) {
         cubeGroup.remove(cubeGroup.children[0]);
       }
@@ -491,7 +553,7 @@
         for (let y = -1; y <= 1; y++) {
           for (let z = -1; z <= 1; z++) {
             if (x === 0 && y === 0 && z === 0) continue;
-            const piece = createRealisticCubie(x, y, z);
+            const piece = createRealisticCubie(x, y, z, facelets);
             cubeGroup.add(piece);
             cubies.push(piece);
           }
@@ -701,6 +763,7 @@
         document.getElementById("metrics-status-badge").innerText = "IN PROGRESS";
         document.getElementById("metrics-status-badge").className = "text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30";
       } else {
+        buildRealisticCube();
         badge.innerText = "✓";
         instructionText.innerText = "All moves executed! The Rubik's Cube is fully solved.";
         document.getElementById("banner-status-text").innerText = "SOLVED";
@@ -996,6 +1059,10 @@
           throw new Error(err.detail || "Validation failed");
         }
         modal.classList.add("hidden");
+        buildRealisticCube(full54);
+        moveQueue = [];
+        moveHistory = [];
+        currentStepIndex = 0;
         document.getElementById("cube-status-badge").className = "text-[11px] px-2.5 py-0.5 rounded-full font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20";
         document.getElementById("cube-status-badge").innerText = "CUSTOM CUBE";
 
